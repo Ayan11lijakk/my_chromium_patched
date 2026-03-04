@@ -10,83 +10,73 @@ env:
   CHROMIUM_DIR: "${{ github.workspace }}/chromium_src"
 
 jobs:
-  build-windows:
-    runs-on: windows-2022
+  build:
+    runs-on: ubuntu-22.04
     timeout-minutes: 480
 
     steps:
-      # ─────────────────────────────────────────────────────
-      # 1. Checkout your repo
-      # ─────────────────────────────────────────────────────
-      - name: Checkout repository
+      # ─────────────────────────────────────────────
+      # 1. Checkout
+      # ─────────────────────────────────────────────
+      - name: Checkout repo
         uses: actions/checkout@v4
 
-      # ─────────────────────────────────────────────────────
-      # 2. Setup Python
-      # ─────────────────────────────────────────────────────
-      - name: Setup Python 3.11
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      # ─────────────────────────────────────────────────────
-      # 3. Install depot_tools
-      # ─────────────────────────────────────────────────────
+      # ─────────────────────────────────────────────
+      # 2. Install depot_tools
+      # ─────────────────────────────────────────────
       - name: Install depot_tools
-        shell: powershell
         run: |
-          git clone --depth=1 https://chromium.googlesource.com/chromium/tools/depot_tools.git C:\depot_tools
-          echo "C:\depot_tools" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-          # Disable depot_tools auto-update
-          echo "DEPOT_TOOLS_UPDATE=0" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          echo "DEPOT_TOOLS_WIN_TOOLCHAIN=0" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          git clone --depth=1 https://chromium.googlesource.com/chromium/tools/depot_tools.git ~/depot_tools
+          echo "$HOME/depot_tools" >> $GITHUB_PATH
 
-      # ─────────────────────────────────────────────────────
-      # 4. Verify Visual Studio
-      # ─────────────────────────────────────────────────────
-      - name: Verify Visual Studio
-        shell: cmd
-        run: |
-          where cl.exe || (
-            echo "CL not in PATH, searching..."
-            for /f "delims=" %%i in ('dir /b /s "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\*\bin\Hostx64\x64\cl.exe" 2^>nul') do echo Found: %%i
-          )
-          vswhere -latest -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
-
-      # ─────────────────────────────────────────────────────
-      # 5. Cache Chromium source
-      # ─────────────────────────────────────────────────────
+      # ─────────────────────────────────────────────
+      # 3. Cache Chromium source
+      # ─────────────────────────────────────────────
       - name: Cache Chromium source
         id: cache_src
         uses: actions/cache@v4
         with:
           path: chromium_src
-          key: chromium-win-src-${{ env.CHROMIUM_VERSION }}-v2
-          restore-keys: |
-            chromium-win-src-${{ env.CHROMIUM_VERSION }}-
+          key: chromium-src-${{ env.CHROMIUM_VERSION }}-v1
 
-      # ─────────────────────────────────────────────────────
-      # 6. Fetch Chromium source
-      # ─────────────────────────────────────────────────────
+      # ─────────────────────────────────────────────
+      # 4. Fetch Chromium source (if not cached)
+      # ─────────────────────────────────────────────
       - name: Fetch Chromium source
         if: steps.cache_src.outputs.cache-hit != 'true'
-        shell: cmd
         run: |
-          mkdir chromium_src
+          mkdir -p chromium_src
           cd chromium_src
 
-          echo solutions = [ > .gclient
-          echo   { >> .gclient
-          echo     "name": "src", >> .gclient
-          echo     "url": "https://chromium.googlesource.com/chromium/src.git", >> .gclient
-          echo     "managed": False, >> .gclient
-          echo     "custom_deps": {}, >> .gclient
-          echo     "custom_vars": {}, >> .gclient
-          echo   }, >> .gclient
-          echo ] >> .gclient
-          echo target_os = ['win'] >> .gclient
+          # Create .gclient config
+          cat > .gclient << 'EOF'
+          solutions = [
+            {
+              "name": "src",
+              "url": "https://chromium.googlesource.com/chromium/src.git",
+              "managed": False,
+              "custom_deps": {},
+              "custom_vars": {},
+            },
+          ]
+          target_os = ['win']
+          EOF
 
-          gclient sync --no-history --nohooks -r src@refs/tags/%CHROMIUM_VERSION%
+          # Fetch with no history (faster)
+          gclient sync \
+            --no-history \
+            --nohooks \
+            --with_branch_heads \
+            --with_tags \
+            -r src@refs/tags/${{ env.CHROMIUM_VERSION }}
+
+      # ─────────────────────────────────────────────
+      # 5. Install build dependencies
+      # ─────────────────────────────────────────────
+      - name: Install build dependencies
+        run: |
+          cd chromium_src/src
+          sudo ./build/install-build-deps.sh --no-prompt --no-chromeos-fonts
 
       # ─────────────────────────────────────────────
       # 6. Apply patches (fuzz-tolerant)
@@ -241,12 +231,12 @@ jobs:
 
           # Copy essential files
           cp chrome.exe antidetect-chromium/ 2>/dev/null || true
-          cp -r chromedriver.exe antidetect-chromium/ 2>/dev/null || true
-          cp *chrome.dll antidetect-chromium/ 2>/dev/null || true
+          cp chromedriver.exe  antidetect-chromium/ 2>/dev/null || true
+          cp chrome.dll antidetect-chromium/ 2>/dev/null || true
           cp chrome_elf.dll antidetect-chromium/ 2>/dev/null || true
-          cp icudtl.dat antidetect-chromium/ 2>/dev/null || true
-          cp *.pak  antidetect-chromium/ 2>/dev/null || true
-          cp *.bin   antidetect-chromium/ 2>/dev/null || true
+          cp chrome_elf.dll antidetect-chromium/ 2>/dev/null || true
+          cp *.pak antidetect-chromium/ 2>/dev/null || true
+          cp *.bin antidetect-chromium/ 2>/dev/null || true
 
           # Strip debug symbols
           strip antidetect-chromium/chrome antidetect-chromium/chromedriver 2>/dev/null || true
