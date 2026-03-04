@@ -67,7 +67,7 @@ jobs:
               "custom_vars": {},
             },
           ]
-          target_os = ['linux']
+          target_os = ['win']
           EOF
 
           # Fetch with no history (faster)
