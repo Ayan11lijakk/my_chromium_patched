@@ -237,37 +237,34 @@ jobs:
 
           mkdir -p antidetect-chromium
 
-         # Copy binaries
-          Copy-Item chrome.exe         $pkg\ -ErrorAction SilentlyContinue
-          Copy-Item chromedriver.exe   $pkg\ -ErrorAction SilentlyContinue
-          Copy-Item chrome.dll         $pkg\ -ErrorAction SilentlyContinue
-          Copy-Item chrome_elf.dll     $pkg\ -ErrorAction SilentlyContinue
-          Copy-Item icudtl.dat         $pkg\ -ErrorAction SilentlyContinue
-          Copy-Item *.pak              $pkg\ -ErrorAction SilentlyContinue
-          Copy-Item *.bin              $pkg\ -ErrorAction SilentlyContinue
+          # Copy essential files
+          cp chrome.exe antidetect-chromium/ 2>/dev/null || true
+          cp -r chromedriver.exe antidetect-chromium/ 2>/dev/null || true
+          cp *chrome.dll antidetect-chromium/ 2>/dev/null || true
+          cp chrome_elf.dll antidetect-chromium/ 2>/dev/null || true
+          cp icudtl.dat antidetect-chromium/ 2>/dev/null || true
+          cp *.pak  antidetect-chromium/ 2>/dev/null || true
+          cp *.bin   antidetect-chromium/ 2>/dev/null || true
 
-          # Copy locales folder
-          if (Test-Path locales) {
-            Copy-Item locales $pkg\locales -Recurse -ErrorAction SilentlyContinue
-          }
+          # Strip debug symbols
+          strip antidetect-chromium/chrome antidetect-chromium/chromedriver 2>/dev/null || true
 
-          # Create zip archive
-          Compress-Archive -Path $pkg -DestinationPath "$pkg.zip" -Force
+          # Create archive
+          tar -czf antidetect-chromium-linux-x64.tar.gz antidetect-chromium/
 
           # Checksum
-          (Get-FileHash "$pkg.zip" -Algorithm SHA256).Hash | Out-File "$pkg.zip.sha256"
+          sha256sum antidetect-chromium-linux-x64.tar.gz > antidetect-chromium-linux-x64.tar.gz.sha256
 
-          Write-Host "Package size: $((Get-Item "$pkg.zip").Length / 1MB) MB"
-          Get-ChildItem $pkg\ | Select-Object Name, Length
+          echo "Build size: $(du -h antidetect-chromium-linux-x64.tar.gz | cut -f1)"
 
-      # ─────────────────────────────────────────────────────
-      # 12. Upload artifact
-      # ─────────────────────────────────────────────────────
-      - name: Upload artifact
+      # ─────────────────────────────────────────────
+      # 10. Upload artifact
+      # ─────────────────────────────────────────────
+      - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: antidetect-chromium-win-x64-${{ env.CHROMIUM_VERSION }}
+          name: antidetect-chromium-linux-x64
           path: |
-            chromium_src/src/out/Release/antidetect-chromium-win-x64.zip
-            chromium_src/src/out/Release/antidetect-chromium-win-x64.zip.sha256
-          retention-days: 14
+            chromium_src/src/out/Release/antidetect-chromium-linux-x64.tar.gz
+            chromium_src/src/out/Release/antidetect-chromium-linux-x64.tar.gz.sha256
+          retention-days: 7
