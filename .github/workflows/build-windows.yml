@@ -382,4 +382,3 @@ jobs:
             chromium_src/src/out/Release/antidetect-chromium-win-x64.zip
             chromium_src/src/out/Release/antidetect-chromium-win-x64.zip.sha256
           retention-days: 30
-WORKFLOW
