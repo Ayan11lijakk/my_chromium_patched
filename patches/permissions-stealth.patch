@@ -1,6 +1,6 @@
-diff --git a/chrome/browser/permissions/permission_manager.cc b/chrome/browser/permissions/permission_manager.cc
---- a/chrome/browser/permissions/permission_manager.cc
-+++ b/chrome/browser/permissions/permission_manager.cc
+diff --git /components/permissions/permission_manager.cc b/components/permissions/permission_manager.cc
+--- a/components/permissions/permission_manager.cc
++++ b/components/permissions/permission_manager.cc
 @@ -267,6 +267,14 @@ blink::mojom::PermissionStatus PermissionManager::GetPermissionStatusForFrame(
      const GURL& requesting_origin,
      const GURL& embedding_origin) {
